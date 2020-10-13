@@ -1,4 +1,4 @@
-package celbuxhelpers
+package types
 
 import (
 	"cloud.google.com/go/bigquery"
@@ -7,6 +7,7 @@ import (
 	"cloud.google.com/go/errorreporting"
 	"cloud.google.com/go/logging"
 	"cloud.google.com/go/storage"
+	"github.com/Celbux/utils/helpers"
 )
 
 // KindSuffix TODO annotate

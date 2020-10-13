@@ -1,4 +1,4 @@
-module github.com/Celbux/internal-services/pkg/celbux-helpers
+module github.com/Celbux/utils
 
 go 1.15
 

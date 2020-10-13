@@ -1,4 +1,4 @@
-package celbuxhelpers
+package helpers
 
 import (
 	"bytes"
