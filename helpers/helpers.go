@@ -28,6 +28,22 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+/*
+ * GCP Helpers
+ * Celbux helpers for easy & neat integration with GCP in main app engine code
+ * Requirement: Call InitialiseClients(projectID) in main app start up
+ */
+
+// GCP Clients
+var ErrorClient *errorreporting.Client
+var DatastoreClient *datastore.Client
+var StorageClient *storage.Client
+var LoggingClient *logging.Client
+var TasksClient *cloudtasks.Client
+var BigQueryClient *bigquery.Client
+
+var KindSuffix = GetTimeString()
+
 // GetProjectID TODO annotate
 func GetProjectID() (string, error) {
 	// Get Project ID
