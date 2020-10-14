@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -200,19 +199,11 @@ func DownloadObject(bucket string, object string) ([]byte, error) {
 	return data, nil
 }
 
-func QueueHTTPRequest(projectID, locationID, queueID string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
-	// createHTTPTask creates a new task with a HTTP target then adds it to a Queue.
-	// e.g. projects/bulk-writes/locations/europe-west1/queues/datastore-queue
-
-	// Build the Task queue path.
-	queuePath := fmt.Sprintf("projects/%s/locations/%s/queues/%s", projectID, locationID, queueID)
-
+func QueueHTTPRequest(queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
 	// Build the Task payload.
-	// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#CreateTaskRequest
 	req := &taskspb.CreateTaskRequest{
 		Parent: queuePath,
 		Task: &taskspb.Task{
-			// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#HttpRequest
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: request,
 			},
@@ -225,84 +216,6 @@ func QueueHTTPRequest(projectID, locationID, queueID string, request *taskspb.Ht
 	}
 
 	return createdTask, nil
-}
-
-type QueueServiceRequest struct {
-	// Used both for receiving data here, and sending to queue service
-	Kind     string
-	Entities []interface{}
-}
-
-func WriteToDatastore(request QueueServiceRequest) error {
-	// Properly splits up entities into 31MB chunks to be sent to queue-service coordinate writes
-	// App Engine HTTP PUT limit is 32MB
-	queueServiceRequest := QueueServiceRequest{
-		Kind:     request.Kind,
-		Entities: nil,
-	}
-
-	var inOperation bool
-	var bits int
-	for _, entity := range request.Entities {
-		// Set to true when operating
-		inOperation = true
-
-		// Get megabytes
-		bits += len(entity.([]byte))
-		megabytes := bits / 8000000
-
-		// If data is over 31 megabytes, send HTTP request, else just add entity to slice
-		if megabytes >= 31 {
-			err := sendRequest(queueServiceRequest)
-			if err != nil {
-				return LogError(err)
-			}
-
-			inOperation = false
-			queueServiceRequest.Entities = nil
-		} else {
-			queueServiceRequest.Entities = append(queueServiceRequest.Entities, entity)
-		}
-	}
-
-	// Makes sure to write last data if for loop exited while still in operation
-	if inOperation {
-		err := sendRequest(queueServiceRequest)
-		if err != nil {
-			return LogError(err)
-		}
-
-		inOperation = false
-	}
-
-	return nil
-}
-
-func sendRequest(data QueueServiceRequest) error {
-	client := &http.Client{}
-	projectID, err := GetProjectID()
-	if err != nil {
-		return LogError(err)
-	}
-
-	var dataJSON []byte
-	dataJSON, err = json.Marshal(data)
-	if err != nil {
-		return LogError(err)
-	}
-
-	var req *http.Request
-	req, err = http.NewRequest(http.MethodPut, fmt.Sprintf("queue-service-dot-%v.ew.r.appspot.com/start_work?opsPerInstance=1&entitiesPerRequest=500", projectID), bytes.NewBuffer(dataJSON))
-	if err != nil {
-		return LogError(err)
-	}
-
-	_, err = client.Do(req)
-	if err != nil {
-		return LogError(err)
-	}
-
-	return nil
 }
 
 func PrintHTTPBody(resp *http.Response) (string, error) {
