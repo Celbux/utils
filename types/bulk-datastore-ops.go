@@ -20,7 +20,7 @@ type ProcessRequest struct {
 	EntityChunks []EntityChunk
 }
 
-//EntityChunk includes a chunk of entities to store. MAX 500 per
+//EntityChunk includes a chunk of entities to store. MAX 500 in interface{}
 type EntityChunk struct {
 	Entities interface{}
 }
