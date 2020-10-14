@@ -1,5 +1,7 @@
 package types
 
+import "cloud.google.com/go/datastore"
+
 // Maps generic interface to their type. Must be passed when writing to Datastore
 const (
 	TypeWalletData = iota + 1
@@ -14,6 +16,7 @@ const (
 type ProcessRequest struct {
 	Kind         string
 	Type         int
+	EntityKeys	 []*datastore.Key
 	EntityChunks []EntityChunk
 }
 
