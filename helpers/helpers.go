@@ -210,7 +210,10 @@ func QueueHTTPRequest(queuePath string, request *taskspb.HttpRequest) (*taskspb.
 		},
 	}
 
-	createdTask, err := TasksClient.CreateTask(context.Background(), req)
+	ctx, cancel := context.WithDeadline(nil, time.Now().Add(time.Second * 600))
+	defer cancel()
+
+	createdTask, err := TasksClient.CreateTask(ctx, req)
 	if err != nil {
 		return nil, LogError(err)
 	}
