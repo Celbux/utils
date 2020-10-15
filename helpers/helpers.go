@@ -210,7 +210,7 @@ func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.Ht
 		},
 	}
 
-	ctxDeadline, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second * 600))
+	ctxDeadline, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second * 30))
 	defer cancel()
 
 	createdTask, err := TasksClient.CreateTask(ctxDeadline, req)
