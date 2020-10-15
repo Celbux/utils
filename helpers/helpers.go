@@ -199,7 +199,7 @@ func DownloadObject(bucket string, object string) ([]byte, error) {
 	return data, nil
 }
 
-func QueueHTTPRequest(queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
+func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
 	// Build the Task payload.
 	req := &taskspb.CreateTaskRequest{
 		Parent: queuePath,
@@ -210,10 +210,10 @@ func QueueHTTPRequest(queuePath string, request *taskspb.HttpRequest) (*taskspb.
 		},
 	}
 
-	ctx, cancel := context.WithDeadline(nil, time.Now().Add(time.Second * 600))
+	ctxDeadline, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second * 600))
 	defer cancel()
 
-	createdTask, err := TasksClient.CreateTask(ctx, req)
+	createdTask, err := TasksClient.CreateTask(ctxDeadline, req)
 	if err != nil {
 		return nil, LogError(err)
 	}
