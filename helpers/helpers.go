@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"cloud.google.com/go/pubsub"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -41,6 +42,7 @@ var StorageClient *storage.Client
 var LoggingClient *logging.Client
 var TasksClient *cloudtasks.Client
 var BigQueryClient *bigquery.Client
+var PubSubClient *pubsub.Client
 
 var KindSuffix = GetTimeString()
 
@@ -107,6 +109,14 @@ func InitialiseClients(projectID string) error {
 	// Creates BigQuery client
 	if BigQueryClient == nil {
 		BigQueryClient, err = bigquery.NewClient(context.Background(), projectID)
+		if err != nil {
+			return LogError(err)
+		}
+	}
+
+	// Creates PubSub client
+	if PubSubClient == nil {
+		PubSubClient, err = pubsub.NewClient(context.Background(), projectID)
 		if err != nil {
 			return LogError(err)
 		}
