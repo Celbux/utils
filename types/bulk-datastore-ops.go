@@ -1,11 +1,15 @@
 package types
 
+import "cloud.google.com/go/datastore"
+
 // Maps generic interface to their type. Must be passed when writing to Datastore
 const (
 	TypeWalletData = iota + 1
 	TypeVoucher
 	TypePair
 )
+
+
 
 //ProcessRequest contains all information required for this instance to bulk write
 //Kind is used for Datastore grouping
@@ -14,10 +18,16 @@ const (
 type ProcessRequest struct {
 	Kind         string
 	Type         int
+	EntityKeys	 []EntityKeyChunk
 	EntityChunks []EntityChunk
 }
 
-//EntityChunk includes a chunk of entities to store. MAX 500 per
+//EntityChunk includes a chunk of entities to store. MAX 500 in interface{}
 type EntityChunk struct {
 	Entities interface{}
+}
+
+//EntityKeyChunk includes a chunk of entity keys to store. MAX 500 keys
+type EntityKeyChunk struct {
+	EntityKeys []*datastore.Key
 }

@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -131,7 +131,6 @@ func InitialiseClients(projectID string, serviceAccount... string) error {
 		}
 	}
 
-
 	return nil
 }
 
@@ -184,6 +183,11 @@ func GLog(name string, text string, severity *ltype.LogSeverity) {
 		Payload:  text,
 		Severity: logSeverity,
 	})
+
+	// Print for local environment. Displayed as default severity in GCP
+	if IsDev() {
+		fmt.Printf("LOCAL [%v] %v\n", logSeverity.String(), text)
+	}
 }
 
 func LogError(err error) error {
@@ -215,109 +219,26 @@ func DownloadObject(bucket string, object string) ([]byte, error) {
 	return data, nil
 }
 
-func QueueHTTPRequest(projectID, locationID, queueID string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
-	// createHTTPTask creates a new task with a HTTP target then adds it to a Queue.
-	// e.g. projects/bulk-writes/locations/europe-west1/queues/datastore-queue
-
-	// Build the Task queue path.
-	queuePath := fmt.Sprintf("projects/%s/locations/%s/queues/%s", projectID, locationID, queueID)
-
+func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
 	// Build the Task payload.
-	// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#CreateTaskRequest
 	req := &taskspb.CreateTaskRequest{
 		Parent: queuePath,
 		Task: &taskspb.Task{
-			// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#HttpRequest
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: request,
 			},
 		},
 	}
 
-	createdTask, err := TasksClient.CreateTask(context.Background(), req)
+	ctxDeadline, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second * 30))
+	defer cancel()
+
+	createdTask, err := TasksClient.CreateTask(ctxDeadline, req)
 	if err != nil {
 		return nil, LogError(err)
 	}
 
 	return createdTask, nil
-}
-
-type QueueServiceRequest struct {
-	// Used both for receiving data here, and sending to queue service
-	Kind     string
-	Entities []interface{}
-}
-
-func WriteToDatastore(request QueueServiceRequest) error {
-	// Properly splits up entities into 31MB chunks to be sent to queue-service coordinate writes
-	// App Engine HTTP PUT limit is 32MB
-	queueServiceRequest := QueueServiceRequest{
-		Kind:     request.Kind,
-		Entities: nil,
-	}
-
-	var inOperation bool
-	var bits int
-	for _, entity := range request.Entities {
-		// Set to true when operating
-		inOperation = true
-
-		// Get megabytes
-		bits += len(entity.([]byte))
-		megabytes := bits / 8000000
-
-		// If data is over 31 megabytes, send HTTP request, else just add entity to slice
-		if megabytes >= 31 {
-			err := sendRequest(queueServiceRequest)
-			if err != nil {
-				return LogError(err)
-			}
-
-			inOperation = false
-			queueServiceRequest.Entities = nil
-		} else {
-			queueServiceRequest.Entities = append(queueServiceRequest.Entities, entity)
-		}
-	}
-
-	// Makes sure to write last data if for loop exited while still in operation
-	if inOperation {
-		err := sendRequest(queueServiceRequest)
-		if err != nil {
-			return LogError(err)
-		}
-
-		inOperation = false
-	}
-
-	return nil
-}
-
-func sendRequest(data QueueServiceRequest) error {
-	client := &http.Client{}
-	projectID, err := GetProjectID()
-	if err != nil {
-		return LogError(err)
-	}
-
-	var dataJSON []byte
-	dataJSON, err = json.Marshal(data)
-	if err != nil {
-		return LogError(err)
-	}
-
-	var req *http.Request
-	req, err = http.NewRequest(http.MethodPut, fmt.Sprintf("queue-service-dot-%v.ew.r.appspot.com/start_work?opsPerInstance=1&entitiesPerRequest=500", projectID), bytes.NewBuffer(dataJSON))
-	if err != nil {
-		return LogError(err)
-	}
-
-	_, err = client.Do(req)
-	if err != nil {
-		return LogError(err)
-	}
-
-	return nil
 }
 
 func PrintHTTPBody(resp *http.Response) (string, error) {
@@ -394,12 +315,20 @@ func SetKind(val string) {
 	}
 }
 
+// IsDev returns true when this app is NOT deployed, and is run locally
 func IsDev() bool {
-	return appengine.IsDevAppServer()
+	return !appengine.IsDevAppServer()
 }
 
-func ExportDS(kind string, key string) {
-
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
 }
 
 func setGCPKey(key string) {
