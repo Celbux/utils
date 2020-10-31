@@ -136,6 +136,7 @@ func InitialiseClients(projectID string, serviceAccount... string) error {
 
 func RunBigQuery(query string) error {
 	q := BigQueryClient.Query(query)
+	q.Location = "EU"
 	job, err := q.Run(Ctx)
 	if err != nil {
 		return err
@@ -145,7 +146,7 @@ func RunBigQuery(query string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
