@@ -145,6 +145,8 @@ func RunBigQuery(query string) error {
 	if err != nil {
 		return err
 	}
+	
+	return nil
 }
 
 func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
