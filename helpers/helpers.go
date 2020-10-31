@@ -134,6 +134,19 @@ func InitialiseClients(projectID string, serviceAccount... string) error {
 	return nil
 }
 
+func RunBigQuery(query string) error {
+	q := BigQueryClient.Query(query)
+	job, err := q.Run(Ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = job.Wait(Ctx)
+	if err != nil {
+		return err
+	}
+}
+
 func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
 	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
 	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
