@@ -384,5 +384,5 @@ func SetKind(val string) {
 
 // IsDev TODO annotate
 func IsDev() bool {
-	return appengine.IsDevAppServer()
+	return !appengine.IsDevAppServer()
 }
