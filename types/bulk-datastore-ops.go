@@ -9,6 +9,8 @@ const (
 	TypePair
 )
 
+
+
 //ProcessRequest contains all information required for this instance to bulk write
 //Kind is used for Datastore grouping
 //Type is used to map interface to their type when actually writing to datastore
@@ -16,11 +18,16 @@ const (
 type ProcessRequest struct {
 	Kind         string
 	Type         int
-	EntityKeys	 []*datastore.Key
+	EntityKeys	 []EntityKeyChunk
 	EntityChunks []EntityChunk
 }
 
 //EntityChunk includes a chunk of entities to store. MAX 500 in interface{}
 type EntityChunk struct {
 	Entities interface{}
+}
+
+//EntityKeyChunk includes a chunk of entity keys to store. MAX 500 keys
+type EntityKeyChunk struct {
+	EntityKeys []*datastore.Key
 }

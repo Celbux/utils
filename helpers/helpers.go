@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/errorreporting"
 	"cloud.google.com/go/logging"
+	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 	"github.com/golang/gddo/httputil/header"
 	"golang.org/x/net/context"
@@ -41,10 +43,11 @@ var StorageClient *storage.Client
 var LoggingClient *logging.Client
 var TasksClient *cloudtasks.Client
 var BigQueryClient *bigquery.Client
+var PubSubClient *pubsub.Client
+var Ctx context.Context
 
 var KindSuffix = GetTimeString()
 
-// GetProjectID TODO annotate
 func GetProjectID() (string, error) {
 	// Get Project ID
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -55,15 +58,21 @@ func GetProjectID() (string, error) {
 	return projectID, nil
 }
 
-// InitialiseClients TODO annotate
-func InitialiseClients(projectID string) error {
-	//InitialiseClients provides all required GCP clients for use in main app engine code
+//InitialiseClients provides all required GCP clients for use in main app engine code
+//It also takes in an optional serviceAccount
+//This is the location of the *.json file containing your GCP API key
+//serviceAccount is the relative path location to the file
+func InitialiseClients(projectID string, serviceAccount... string) error {
+	Ctx = context.Background()
 	// Initialise error to prevent shadowing
 	var err error
+	if len(serviceAccount) > 0 {
+		setGCPKey(serviceAccount[0])
+	}
 
 	// Creates error client
 	if ErrorClient == nil {
-		ErrorClient, err = errorreporting.NewClient(context.Background(), projectID, errorreporting.Config{
+		ErrorClient, err = errorreporting.NewClient(Ctx, projectID, errorreporting.Config{
 			ServiceName: projectID + "-service",
 			OnError: func(err error) {
 				log.Printf("Could not log error: %v", err)
@@ -76,7 +85,7 @@ func InitialiseClients(projectID string) error {
 
 	// Creates datastore client
 	if DatastoreClient == nil {
-		DatastoreClient, err = datastore.NewClient(context.Background(), projectID)
+		DatastoreClient, err = datastore.NewClient(Ctx, projectID)
 		if err != nil {
 			return LogError(err)
 		}
@@ -84,7 +93,7 @@ func InitialiseClients(projectID string) error {
 
 	// Creates logging client
 	if LoggingClient == nil {
-		LoggingClient, err = logging.NewClient(context.Background(), projectID)
+		LoggingClient, err = logging.NewClient(Ctx, projectID)
 		if err != nil {
 			return LogError(err)
 		}
@@ -92,7 +101,7 @@ func InitialiseClients(projectID string) error {
 
 	// Creates storage client
 	if StorageClient == nil {
-		StorageClient, err = storage.NewClient(context.Background())
+		StorageClient, err = storage.NewClient(Ctx)
 		if err != nil {
 			return LogError(err)
 		}
@@ -100,7 +109,7 @@ func InitialiseClients(projectID string) error {
 
 	// Creates storage client
 	if TasksClient == nil {
-		TasksClient, err = cloudtasks.NewClient(context.Background())
+		TasksClient, err = cloudtasks.NewClient(Ctx)
 		if err != nil {
 			return LogError(err)
 		}
@@ -108,15 +117,39 @@ func InitialiseClients(projectID string) error {
 
 	// Creates BigQuery client
 	if BigQueryClient == nil {
-		BigQueryClient, err = bigquery.NewClient(context.Background(), projectID)
+		BigQueryClient, err = bigquery.NewClient(Ctx, projectID)
 		if err != nil {
 			return LogError(err)
 		}
 	}
+
+	// Creates PubSub client
+	if PubSubClient == nil {
+		PubSubClient, err = pubsub.NewClient(Ctx, projectID)
+		if err != nil {
+			return LogError(err)
+		}
+	}
+
 	return nil
 }
 
-// EncodeStruct TODO annotate
+func RunBigQuery(query string) error {
+	q := BigQueryClient.Query(query)
+	q.Location = "EU"
+	job, err := q.Run(Ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = job.Wait(Ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
 	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
 	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -128,7 +161,6 @@ func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
 	return nil
 }
 
-// DecodeStruct TODO annotate
 func DecodeStruct(w http.ResponseWriter, r *http.Request, obj interface{}) error {
 	// Decode request into provided struct pointer
 	if r.Header.Get("Content-Type") != "" {
@@ -149,7 +181,6 @@ func DecodeStruct(w http.ResponseWriter, r *http.Request, obj interface{}) error
 	return nil
 }
 
-// GLog TODO annotate
 func GLog(name string, text string, severity *ltype.LogSeverity) {
 	//severity is nillable. Debug by default
 	// Sets log name to unix nano second
@@ -168,9 +199,13 @@ func GLog(name string, text string, severity *ltype.LogSeverity) {
 		Payload:  text,
 		Severity: logSeverity,
 	})
+
+	// Print for local environment. Displayed as default severity in GCP
+	if IsDev() {
+		fmt.Printf("LOCAL [%v] %v\n", logSeverity.String(), text)
+	}
 }
 
-// LogError TODO annotate
 func LogError(err error) error {
 	// Log for Logs Viewer
 	ErrorClient.Report(errorreporting.Entry{
@@ -184,7 +219,6 @@ func LogError(err error) error {
 	return err
 }
 
-// DownloadObject TODO annotate
 func DownloadObject(bucket string, object string) ([]byte, error) {
 	//DownloadObject downloads an object from Cloud Storage
 	rc, err := StorageClient.Bucket(bucket).Object(object).NewReader(context.Background())
@@ -201,27 +235,21 @@ func DownloadObject(bucket string, object string) ([]byte, error) {
 	return data, nil
 }
 
-// QueueHTTPRequest TODO annotate
-func QueueHTTPRequest(projectID, locationID, queueID string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
-	// createHTTPTask creates a new task with a HTTP target then adds it to a Queue.
-	// e.g. projects/bulk-writes/locations/europe-west1/queues/datastore-queue
-
-	// Build the Task queue path.
-	queuePath := fmt.Sprintf("projects/%s/locations/%s/queues/%s", projectID, locationID, queueID)
-
+func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
 	// Build the Task payload.
-	// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#CreateTaskRequest
 	req := &taskspb.CreateTaskRequest{
 		Parent: queuePath,
 		Task: &taskspb.Task{
-			// https://godoc.org/google.golang.org/genproto/googleapis/cloud/tasks/v2#HttpRequest
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: request,
 			},
 		},
 	}
 
-	createdTask, err := TasksClient.CreateTask(context.Background(), req)
+	ctxDeadline, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second * 30))
+	defer cancel()
+
+	createdTask, err := TasksClient.CreateTask(ctxDeadline, req)
 	if err != nil {
 		return nil, LogError(err)
 	}
@@ -229,87 +257,6 @@ func QueueHTTPRequest(projectID, locationID, queueID string, request *taskspb.Ht
 	return createdTask, nil
 }
 
-// QueueServiceRequest TODO annotate
-type QueueServiceRequest struct {
-	// Used both for receiving data here, and sending to queue service
-	Kind     string
-	Entities []interface{}
-}
-
-// WriteToDatastore TODO annotate
-func WriteToDatastore(request QueueServiceRequest) error {
-	// Properly splits up entities into 31MB chunks to be sent to queue-service coordinate writes
-	// App Engine HTTP PUT limit is 32MB
-	queueServiceRequest := QueueServiceRequest{
-		Kind:     request.Kind,
-		Entities: nil,
-	}
-
-	var inOperation bool
-	var bits int
-	for _, entity := range request.Entities {
-		// Set to true when operating
-		inOperation = true
-
-		// Get megabytes
-		bits += len(entity.([]byte))
-		megabytes := bits / 8000000
-
-		// If data is over 31 megabytes, send HTTP request, else just add entity to slice
-		if megabytes >= 31 {
-			err := sendRequest(queueServiceRequest)
-			if err != nil {
-				return LogError(err)
-			}
-
-			inOperation = false
-			queueServiceRequest.Entities = nil
-		} else {
-			queueServiceRequest.Entities = append(queueServiceRequest.Entities, entity)
-		}
-	}
-
-	// Makes sure to write last data if for loop exited while still in operation
-	if inOperation {
-		err := sendRequest(queueServiceRequest)
-		if err != nil {
-			return LogError(err)
-		}
-
-		inOperation = false
-	}
-
-	return nil
-}
-
-func sendRequest(data QueueServiceRequest) error {
-	client := &http.Client{}
-	projectID, err := GetProjectID()
-	if err != nil {
-		return LogError(err)
-	}
-
-	var dataJSON []byte
-	dataJSON, err = json.Marshal(data)
-	if err != nil {
-		return LogError(err)
-	}
-
-	var req *http.Request
-	req, err = http.NewRequest(http.MethodPut, fmt.Sprintf("queue-service-dot-%v.ew.r.appspot.com/start_work?opsPerInstance=1&entitiesPerRequest=500", projectID), bytes.NewBuffer(dataJSON))
-	if err != nil {
-		return LogError(err)
-	}
-
-	_, err = client.Do(req)
-	if err != nil {
-		return LogError(err)
-	}
-
-	return nil
-}
-
-// PrintHTTPBody TODO annotate
 func PrintHTTPBody(resp *http.Response) (string, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -318,12 +265,10 @@ func PrintHTTPBody(resp *http.Response) (string, error) {
 	return string(body), nil
 }
 
-// Encrypt TODO annotate
 func Encrypt(data string) string {
 	return b64.URLEncoding.EncodeToString([]byte(data))
 }
 
-// Decrypt TODO annotate
 func Decrypt(data string) (string, error) {
 	s, err := b64.URLEncoding.DecodeString(data)
 	if err != nil {
@@ -332,7 +277,6 @@ func Decrypt(data string) (string, error) {
 	return string(s), nil
 }
 
-// GetTestName TODO annotate
 func GetTestName() string {
 	// Gets the current running method by reflection.
 	// this is useful for linking tests to functions for logging.
@@ -344,7 +288,6 @@ func GetTestName() string {
 	return strings.Replace(r, ".", "", -1)
 }
 
-// WriteFile TODO annotate
 func WriteFile(data string, name string) error {
 	f, err := os.Create(name)
 	if err != nil {
@@ -358,14 +301,45 @@ func WriteFile(data string, name string) error {
 	return nil
 }
 
-// GetTimeString TODO annotate
+/*
+ * Default: ReadModeSingle (Single is stored in the 0th element)
+ * ReadModeSingle returns a single string, including all \n
+ * ReadModeSingleCollapsed returns a single string, with all \n stripped away
+ * ReadModeMultiline returns an array of string, split on \n (each line)
+ */
+const (
+	ReadModeSingle = iota
+	ReadModeSingleCollapsed
+	ReadModeMultiline
+)
+func ReadFile(file string, method... int) ([]string, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+	    return nil, err
+	}
+
+	if method == nil {
+		method = []int { ReadModeSingle }
+	}
+
+	switch method[0] {
+	case ReadModeSingle:
+		return []string { string(data) }, nil
+	case ReadModeSingleCollapsed:
+		return []string { strings.Replace(string(data), "\n", "", -1) }, nil
+	case ReadModeMultiline:
+		return strings.Split(string(data), "\n"), nil
+	}
+
+	return []string { string(data) }, nil
+}
+
 func GetTimeString() string {
 	loc, _ := time.LoadLocation("Africa/Johannesburg")
 	startTime := time.Now().In(loc).String()
 	return startTime[:len(startTime)-18]
 }
 
-// GetKind TODO annotate
 func GetKind(kind string) string {
 	if IsDev() {
 		return kind + KindSuffix
@@ -373,7 +347,6 @@ func GetKind(kind string) string {
 	return kind
 }
 
-// SetKind TODO annotate
 func SetKind(val string) {
 	if IsDev() {
 		KindSuffix = GetTimeString()
@@ -382,7 +355,31 @@ func SetKind(val string) {
 	}
 }
 
-// IsDev TODO annotate
+// IsDev returns true when this app is NOT deployed, and is run locally
 func IsDev() bool {
 	return !appengine.IsDevAppServer()
+}
+
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
+}
+
+func setGCPKey(key string) {
+	absPath, err := filepath.Abs(key)
+	if err != nil {
+		fmt.Printf("could not find key at location: %v", key)
+	}
+
+
+	err = os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", absPath)
+	if err != nil {
+		fmt.Printf("could not find key at location: %v", absPath)
+	}
 }
