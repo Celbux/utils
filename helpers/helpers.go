@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -382,4 +383,14 @@ func setGCPKey(key string) {
 	if err != nil {
 		fmt.Printf("could not find key at location: %v", absPath)
 	}
+}
+
+func Match(data string, regex string) ([][]string, error) {
+	r, err := regexp.Compile(regex)
+	if err != nil {
+	    return nil, err
+	}
+
+
+	return r.FindAllStringSubmatch(data, -1), nil
 }
