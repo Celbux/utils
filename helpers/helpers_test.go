@@ -27,6 +27,18 @@ func TestMatch(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: fmt.Sprintf("%s: HappyDay2", GetTestName()),
+			data: "Status: In Progress | Assignee: steven@mozimbique.com",
+			regex: "Status: (.+).+\\| Assignee: (.*)",
+			expected: [][]string{
+				{
+					"Status: In Progress | Assignee: steven@mozimbique.com",
+					"In Progress",
+					"steven@mozimbique.com",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

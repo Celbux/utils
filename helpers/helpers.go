@@ -390,7 +390,5 @@ func Match(data string, regex string) ([][]string, error) {
 	if err != nil {
 	    return nil, err
 	}
-
-
 	return r.FindAllStringSubmatch(data, -1), nil
 }
