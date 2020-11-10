@@ -162,7 +162,7 @@ func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
 	return nil
 }
 
-func DecodeStruct(w http.ResponseWriter, r *http.Request, obj interface{}) error {
+func Decode(r *http.Request, obj interface{}) error {
 	// Decode request into provided struct pointer
 	if r.Header.Get("Content-Type") != "" {
 		value, _ := header.ParseValueAndParams(r.Header, "Content-Type")
@@ -171,7 +171,6 @@ func DecodeStruct(w http.ResponseWriter, r *http.Request, obj interface{}) error
 		}
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
 	err := json.NewDecoder(r.Body).Decode(&obj)
 
 	if err != nil {
