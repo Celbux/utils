@@ -22,7 +22,6 @@ import (
 	"cloud.google.com/go/logging"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
-	"github.com/golang/gddo/httputil/header"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
@@ -164,13 +163,6 @@ func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
 
 func Decode(r *http.Request, obj interface{}) error {
 	// Decode request into provided struct pointer
-	if r.Header.Get("Content-Type") != "" {
-		value, _ := header.ParseValueAndParams(r.Header, "Content-Type")
-		if value != "application/json" {
-			return status.Error(codes.FailedPrecondition, "content type must be application/json")
-		}
-	}
-
 	err := json.NewDecoder(r.Body).Decode(&obj)
 
 	if err != nil {
