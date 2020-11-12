@@ -154,6 +154,10 @@ func RunBigQuery(query string) error {
 func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
 	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
 	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
+	(w).Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, OPTIONS, DELETE")
+	(w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 	err := json.NewEncoder(w).Encode(obj)
 	if err != nil {
 		fmt.Println(err.Error())
