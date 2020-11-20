@@ -4,6 +4,7 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/Celbux/utils/types"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -386,4 +387,12 @@ func Match(data string, regex string) ([][]string, error) {
 	    return nil, err
 	}
 	return r.FindAllStringSubmatch(data, -1), nil
+}
+
+func FinalErr(w http.ResponseWriter, err error) error {
+	if err != nil {
+		_ =  EncodeStruct(w, &types.Response{Error: LogError(err).Error()})
+		return err
+	}
+	return nil
 }
