@@ -9,7 +9,6 @@ require (
 	cloud.google.com/go/logging v1.1.0
 	cloud.google.com/go/pubsub v1.3.1
 	cloud.google.com/go/storage v1.12.0
-	github.com/golang/gddo v0.0.0-20200831202555-721e228c7686
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/net v0.0.0-20201009032441-dbdefad45b89
