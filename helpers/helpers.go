@@ -4,7 +4,6 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/Celbux/utils/types"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -391,7 +390,7 @@ func Match(data string, regex string) ([][]string, error) {
 
 func FinalErr(w http.ResponseWriter, err error) error {
 	if err != nil {
-		_ =  EncodeStruct(w, &types.Response{Error: LogError(err).Error()})
+		_ =  EncodeStruct(w, &Response{Error: LogError(err).Error()})
 		return err
 	}
 	return nil
