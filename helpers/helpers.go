@@ -273,7 +273,9 @@ func PrintHTTPBody(resp *http.Response) (string, error) {
 	return string(body), nil
 }
 
-func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
+func QueueHTTPRequest(ctx context.Context, projectID string, locationID string, queueID string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
+	queuePath := fmt.Sprintf("projects/%s/locations/%s/queues/%s", projectID, locationID, queueID)
+
 	// Build the Task payload.
 	req := &taskspb.CreateTaskRequest{
 		Parent: queuePath,
