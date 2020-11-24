@@ -366,7 +366,7 @@ func SetKind(val string) {
 	}
 }
 
-func StructToMap(structIn struct{}) (map[string]interface{}, error) {
+func StructToMap(structIn interface{}) (map[string]interface{}, error) {
 	var inInterface map[string]interface{}
 	jsonData, _ := json.Marshal(structIn)
 	err := json.Unmarshal(jsonData, &inInterface)
