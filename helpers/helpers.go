@@ -395,3 +395,14 @@ func FinalErr(w http.ResponseWriter, err error) error {
 	}
 	return nil
 }
+
+func StructToMap(structIn struct{}) (map[string]interface{}, error) {
+	var inInterface map[string]interface{}
+	jsonData, _ := json.Marshal(structIn)
+	err := json.Unmarshal(jsonData, &inInterface)
+	if err != nil {
+		return nil, err
+	}
+
+	return inInterface, nil
+}
