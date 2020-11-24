@@ -169,7 +169,10 @@ func InitialiseClients(projectID string, serviceAccount... string) error {
 	// Initialise error to prevent shadowing
 	var err error
 	if len(serviceAccount) > 0 {
-		projectID = setGCPKey(serviceAccount[0])
+		projectID, err = setGCPKey(serviceAccount[0])
+		if err != nil {
+			return err
+		}
 	}
 
 	if projectID == "" {
@@ -336,7 +339,7 @@ func RunBigQuery(query string) error {
 	return nil
 }
 
-func setGCPKey(key string) string {
+func setGCPKey(key string) (string, error) {
 	absPath, err := filepath.Abs(key)
 	if err != nil {
 		fmt.Printf("could not find key at location: %v", key)
@@ -352,8 +355,11 @@ func setGCPKey(key string) string {
 	// Get ProjectID from service account
 	var data struct { ProjectID string `json:"project_id"` }
 	err = json.Unmarshal([]byte(out[0]), &data)
+	if err != nil {
+		return "", err
+	}
 
-	return data.ProjectID
+	return data.ProjectID, nil
 }
 
 func SetKind(val string) {
