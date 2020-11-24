@@ -36,17 +36,66 @@ import (
  * Requirement: Call InitialiseClients(projectID) in main app start up
  */
 
-// GCP Clients
-var ErrorClient *errorreporting.Client
-var DatastoreClient *datastore.Client
-var StorageClient *storage.Client
-var LoggingClient *logging.Client
-var TasksClient *cloudtasks.Client
-var BigQueryClient *bigquery.Client
-var PubSubClient *pubsub.Client
-var Ctx context.Context
+func Decode(r *http.Request, obj interface{}) error {
+	// Decode request into provided struct pointer
+	err := json.NewDecoder(r.Body).Decode(&obj)
 
-var KindSuffix = GetTimeString()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Decrypt(data string) (string, error) {
+	s, err := b64.URLEncoding.DecodeString(data)
+	if err != nil {
+		return "", err
+	}
+	return string(s), nil
+}
+
+func DownloadObject(bucket string, object string) ([]byte, error) {
+	//DownloadObject downloads an object from Cloud Storage
+	rc, err := StorageClient.Bucket(bucket).Object(object).NewReader(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("Object(%q).NewReader: %v", object, err)
+	}
+	defer rc.Close()
+
+	data, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
+	}
+
+	return data, nil
+}
+
+func Encode(w http.ResponseWriter, obj interface{}) error {
+	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
+	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
+	(w).Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, OPTIONS, DELETE")
+	(w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	err := json.NewEncoder(w).Encode(obj)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func Encrypt(data string) string {
+	return b64.URLEncoding.EncodeToString([]byte(data))
+}
+
+func FinalErr(w http.ResponseWriter, err error) error {
+	if err != nil {
+		_ =  Encode(w, &Response{Error: LogError(err).Error()})
+		return err
+	}
+	return nil
+}
 
 func GetProjectID() (string, error) {
 	// Get Project ID
@@ -58,123 +107,28 @@ func GetProjectID() (string, error) {
 	return projectID, nil
 }
 
-//InitialiseClients provides all required GCP clients for use in main app engine code
-//It also takes in an optional serviceAccount
-//This is the location of the *.json file containing your GCP API key
-//serviceAccount is the relative path location to the file
-func InitialiseClients(projectID string, serviceAccount... string) error {
-	Ctx = context.Background()
-	// Initialise error to prevent shadowing
-	var err error
-	if len(serviceAccount) > 0 {
-		setGCPKey(serviceAccount[0])
+func GetKind(kind string) string {
+	if IsDev() {
+		return kind + KindSuffix
 	}
-
-	// Creates error client
-	if ErrorClient == nil {
-		ErrorClient, err = errorreporting.NewClient(Ctx, projectID, errorreporting.Config{
-			ServiceName: projectID + "-service",
-			OnError: func(err error) {
-				log.Printf("Could not log error: %v", err)
-			},
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	// Creates datastore client
-	if DatastoreClient == nil {
-		DatastoreClient, err = datastore.NewClient(Ctx, projectID)
-		if err != nil {
-			return LogError(err)
-		}
-	}
-
-	// Creates logging client
-	if LoggingClient == nil {
-		LoggingClient, err = logging.NewClient(Ctx, projectID)
-		if err != nil {
-			return LogError(err)
-		}
-	}
-
-	// Creates storage client
-	if StorageClient == nil {
-		StorageClient, err = storage.NewClient(Ctx)
-		if err != nil {
-			return LogError(err)
-		}
-	}
-
-	// Creates storage client
-	if TasksClient == nil {
-		TasksClient, err = cloudtasks.NewClient(Ctx)
-		if err != nil {
-			return LogError(err)
-		}
-	}
-
-	// Creates BigQuery client
-	if BigQueryClient == nil {
-		BigQueryClient, err = bigquery.NewClient(Ctx, projectID)
-		if err != nil {
-			return LogError(err)
-		}
-	}
-
-	// Creates PubSub client
-	if PubSubClient == nil {
-		PubSubClient, err = pubsub.NewClient(Ctx, projectID)
-		if err != nil {
-			return LogError(err)
-		}
-	}
-
-	return nil
+	return kind
 }
 
-func RunBigQuery(query string) error {
-	q := BigQueryClient.Query(query)
-	q.Location = "EU"
-	job, err := q.Run(Ctx)
-	if err != nil {
-		return err
-	}
+func GetTestName() string {
+	// Gets the current running method by reflection.
+	// this is useful for linking tests to functions for logging.
 
-	_, err = job.Wait(Ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	fpcs := make([]uintptr, 1)
+	runtime.Callers(2, fpcs)
+	caller := runtime.FuncForPC(fpcs[0] - 1)
+	r := strings.Replace(caller.Name(), "github.com/MSpaceDev/JiraOnTheGO/pkg/service", "", -1)
+	return strings.Replace(r, ".", "", -1)
 }
 
-func EncodeStruct(w http.ResponseWriter, obj interface{}) error {
-	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
-	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
-	(w).Header().Set("Access-Control-Allow-Origin", "*")
-	(w).Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, OPTIONS, DELETE")
-	(w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-	err := json.NewEncoder(w).Encode(obj)
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-	return nil
-}
-
-func Decode(r *http.Request, obj interface{}) error {
-	// Decode request into provided struct pointer
-	err := json.NewDecoder(r.Body).Decode(&obj)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-
-	return nil
+func GetTimeString() string {
+	loc, _ := time.LoadLocation("Africa/Johannesburg")
+	startTime := time.Now().In(loc).String()
+	return startTime[:len(startTime)-18]
 }
 
 func GLog(name string, text string, severity *ltype.LogSeverity) {
@@ -202,6 +156,97 @@ func GLog(name string, text string, severity *ltype.LogSeverity) {
 	}
 }
 
+//InitialiseClients provides all required GCP clients for use in main app engine code
+//It also takes in an optional serviceAccount
+//This is the location of the *.json file containing your GCP API key
+//serviceAccount is the relative path location to the file
+func InitialiseClients(projectID string, serviceAccount... string) error {
+	if isDeclared {
+		return fmt.Errorf("cannot intialise clients more than once")
+	}
+
+	Ctx = context.Background()
+	// Initialise error to prevent shadowing
+	var err error
+	if len(serviceAccount) > 0 {
+		projectID = setGCPKey(serviceAccount[0])
+	}
+
+	if projectID == "" {
+		projectID, err = GetProjectID()
+		if err != nil {
+			return err
+		}
+	}
+
+	// Creates error client
+	ErrorClient, err = errorreporting.NewClient(Ctx, projectID, errorreporting.Config{
+		ServiceName: projectID + "-service",
+		OnError: func(err error) {
+			log.Printf("Could not log error: %v", err)
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Creates datastore client
+	DatastoreClient, err = datastore.NewClient(Ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	// Creates logging client
+	LoggingClient, err = logging.NewClient(Ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	// Creates storage client
+	StorageClient, err = storage.NewClient(Ctx)
+	if err != nil {
+		return err
+	}
+
+	// Creates storage client
+	TasksClient, err = cloudtasks.NewClient(Ctx)
+	if err != nil {
+		return err
+	}
+
+	// Creates BigQuery client
+	BigQueryClient, err = bigquery.NewClient(Ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	// Creates PubSub client
+	PubSubClient, err = pubsub.NewClient(Ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	isDeclared = true
+
+	return nil
+}
+
+// IsDev returns true when this app is NOT deployed, and is run locally
+func IsDev() bool {
+	return !appengine.IsDevAppServer()
+}
+
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
+}
+
 func LogError(err error) error {
 	// Log for Logs Viewer
 	ErrorClient.Report(errorreporting.Entry{
@@ -215,20 +260,20 @@ func LogError(err error) error {
 	return err
 }
 
-func DownloadObject(bucket string, object string) ([]byte, error) {
-	//DownloadObject downloads an object from Cloud Storage
-	rc, err := StorageClient.Bucket(bucket).Object(object).NewReader(context.Background())
+func Match(data string, regex string) ([][]string, error) {
+	r, err := regexp.Compile(regex)
 	if err != nil {
-		return nil, fmt.Errorf("Object(%q).NewReader: %v", object, err)
+		return nil, err
 	}
-	defer rc.Close()
+	return r.FindAllStringSubmatch(data, -1), nil
+}
 
-	data, err := ioutil.ReadAll(rc)
+func PrintHTTPBody(resp *http.Response) (string, error) {
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
+		return "", err
 	}
-
-	return data, nil
+	return string(body), nil
 }
 
 func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.HttpRequest) (*taskspb.Task, error) {
@@ -247,67 +292,12 @@ func QueueHTTPRequest(ctx context.Context, queuePath string, request *taskspb.Ht
 
 	createdTask, err := TasksClient.CreateTask(ctxDeadline, req)
 	if err != nil {
-		return nil, LogError(err)
+		return nil, err
 	}
 
 	return createdTask, nil
 }
 
-func PrintHTTPBody(resp *http.Response) (string, error) {
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", LogError(err)
-	}
-	return string(body), nil
-}
-
-func Encrypt(data string) string {
-	return b64.URLEncoding.EncodeToString([]byte(data))
-}
-
-func Decrypt(data string) (string, error) {
-	s, err := b64.URLEncoding.DecodeString(data)
-	if err != nil {
-		return "", err
-	}
-	return string(s), nil
-}
-
-func GetTestName() string {
-	// Gets the current running method by reflection.
-	// this is useful for linking tests to functions for logging.
-
-	fpcs := make([]uintptr, 1)
-	runtime.Callers(2, fpcs)
-	caller := runtime.FuncForPC(fpcs[0] - 1)
-	r := strings.Replace(caller.Name(), "github.com/MSpaceDev/JiraOnTheGO/src/service", "", -1)
-	return strings.Replace(r, ".", "", -1)
-}
-
-func WriteFile(data string, name string) error {
-	f, err := os.Create(name)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.Write([]byte(data))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-/*
- * Default: ReadModeSingle (Single is stored in the 0th element)
- * ReadModeSingle returns a single string, including all \n
- * ReadModeSingleCollapsed returns a single string, with all \n stripped away
- * ReadModeMultiline returns an array of string, split on \n (each line)
- */
-const (
-	ReadModeSingle = iota
-	ReadModeSingleCollapsed
-	ReadModeMultiline
-)
 func ReadFile(file string, method... int) ([]string, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
@@ -330,17 +320,40 @@ func ReadFile(file string, method... int) ([]string, error) {
 	return []string { string(data) }, nil
 }
 
-func GetTimeString() string {
-	loc, _ := time.LoadLocation("Africa/Johannesburg")
-	startTime := time.Now().In(loc).String()
-	return startTime[:len(startTime)-18]
+func RunBigQuery(query string) error {
+	q := BigQueryClient.Query(query)
+	q.Location = "EU"
+	job, err := q.Run(Ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = job.Wait(Ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func GetKind(kind string) string {
-	if IsDev() {
-		return kind + KindSuffix
+func setGCPKey(key string) string {
+	absPath, err := filepath.Abs(key)
+	if err != nil {
+		fmt.Printf("could not find key at location: %v", key)
 	}
-	return kind
+
+	err = os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", absPath)
+	if err != nil {
+		fmt.Printf("could not find key at location: %v", absPath)
+	}
+
+	out, err := ReadFile(absPath, ReadModeSingleCollapsed)
+
+	// Get ProjectID from service account
+	var data struct { ProjectID string `json:"project_id"` }
+	err = json.Unmarshal([]byte(out[0]), &data)
+
+	return data.ProjectID
 }
 
 func SetKind(val string) {
@@ -351,46 +364,14 @@ func SetKind(val string) {
 	}
 }
 
-// IsDev returns true when this app is NOT deployed, and is run locally
-func IsDev() bool {
-	return !appengine.IsDevAppServer()
-}
-
-func IsNil(i interface{}) bool {
-	if i == nil {
-		return true
-	}
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-		return reflect.ValueOf(i).IsNil()
-	}
-	return false
-}
-
-func setGCPKey(key string) {
-	absPath, err := filepath.Abs(key)
+func WriteFile(data string, name string) error {
+	f, err := os.Create(name)
 	if err != nil {
-		fmt.Printf("could not find key at location: %v", key)
+		return err
 	}
-
-
-	err = os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", absPath)
+	defer f.Close()
+	_, err = f.Write([]byte(data))
 	if err != nil {
-		fmt.Printf("could not find key at location: %v", absPath)
-	}
-}
-
-func Match(data string, regex string) ([][]string, error) {
-	r, err := regexp.Compile(regex)
-	if err != nil {
-	    return nil, err
-	}
-	return r.FindAllStringSubmatch(data, -1), nil
-}
-
-func FinalErr(w http.ResponseWriter, err error) error {
-	if err != nil {
-		_ =  EncodeStruct(w, &Response{Error: LogError(err).Error()})
 		return err
 	}
 	return nil
