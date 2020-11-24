@@ -23,8 +23,6 @@ var Ctx context.Context
 
 var KindSuffix = GetTimeString()
 
-var isDeclared bool
-
 /*
  * ReadFile(file, method)
  * Default Method: ReadModeSingle (Single is stored in the 0th element)

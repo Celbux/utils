@@ -161,10 +161,6 @@ func GLog(name string, text string, severity *ltype.LogSeverity) {
 //This is the location of the *.json file containing your GCP API key
 //serviceAccount is the relative path location to the file
 func InitialiseClients(projectID string, serviceAccount... string) error {
-	if isDeclared {
-		return fmt.Errorf("cannot intialise clients more than once")
-	}
-
 	Ctx = context.Background()
 	// Initialise error to prevent shadowing
 	var err error
@@ -228,8 +224,6 @@ func InitialiseClients(projectID string, serviceAccount... string) error {
 	if err != nil {
 		return err
 	}
-
-	isDeclared = true
 
 	return nil
 }
