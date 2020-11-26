@@ -319,8 +319,17 @@ func ReadFile(file string, method... int) ([]string, error) {
 	return []string { string(data) }, nil
 }
 
-func RunBigQuery(query string) error {
-	q := BigQueryClient.Query(query)
+func RunBigQuery(query string, projectID... string) error {
+	var bqClient *bigquery.Client
+	if len(projectID) > 0 {
+		var err error
+		bqClient, err = bigquery.NewClient(context.Background(), projectID[0])
+		if err != nil {
+			return err
+		}
+	}
+
+	q := bqClient.Query(query)
 	q.Location = "EU"
 	job, err := q.Run(Ctx)
 	if err != nil {
