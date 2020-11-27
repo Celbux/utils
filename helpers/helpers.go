@@ -375,6 +375,17 @@ func SetKind(val string) {
 	}
 }
 
+func StructToMap(structIn interface{}) (map[string]interface{}, error) {
+	var inInterface map[string]interface{}
+	jsonData, _ := json.Marshal(structIn)
+	err := json.Unmarshal(jsonData, &inInterface)
+	if err != nil {
+		return nil, err
+	}
+
+	return inInterface, nil
+}
+
 func WriteFile(data string, name string) error {
 	f, err := os.Create(name)
 	if err != nil {
