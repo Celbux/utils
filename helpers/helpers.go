@@ -1,12 +1,14 @@
 package helpers
 
 import (
+	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,6 +37,24 @@ import (
  * Celbux helpers for easy & neat integration with GCP in main app engine code
  * Requirement: Call InitialiseClients(projectID) in main app start up
  */
+
+
+// CallEndpoint is used to call and Endpoint from code
+// It is used for testing purposes
+func CallEndpoint(f func(http.ResponseWriter, *http.Request), endpoint string, req interface{}) error {
+	w, request, err := setupTestServer(req, endpoint)
+	if err != nil {
+	    return err
+	}
+	
+	f(w, request)
+	res := &Response{}
+	_ = json.NewDecoder(w.Body).Decode(&res)
+	if res.Error != "" {
+		return fmt.Errorf(res.Error)
+	}
+	return nil
+}
 
 func Decode(r *http.Request, obj interface{}) error {
 	// Decode request into provided struct pointer
@@ -370,6 +390,22 @@ func SetKind(val string) {
 		KindSuffix += val
 		fmt.Printf("KindSuffix :%v\n", KindSuffix)
 	}
+}
+
+func setupTestServer(req interface{}, endpoint string) (*httptest.ResponseRecorder, *http.Request, error) {
+	dts, err := json.Marshal(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	request, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(dts))
+	if err != nil {
+	    return nil, nil, err
+	}
+	
+	request.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	return w, request, nil
 }
 
 func StructToMap(structIn interface{}) (map[string]interface{}, error) {
