@@ -111,6 +111,7 @@ func Encrypt(data string) string {
 
 func FinalErr(w http.ResponseWriter, err error) error {
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		_ =  Encode(w, &Response{Error: LogError(err).Error()})
 		return err
 	}
