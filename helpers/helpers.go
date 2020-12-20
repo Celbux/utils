@@ -318,6 +318,21 @@ func QueueHTTPRequest(ctx context.Context, projectID string, locationID string, 
 	return createdTask, nil
 }
 
+func ReadFromCloudStorage(bucket string, objectName string) ([]byte, error) {
+	res, err := StorageClient.Bucket(bucket).Object(objectName).NewReader(Ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(res)
+	res.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
 func ReadFile(file string, method... int) ([]string, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
