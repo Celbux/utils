@@ -94,9 +94,6 @@ func DownloadObject(bucket string, object string) ([]byte, error) {
 func Encode(w http.ResponseWriter, obj interface{}) error {
 	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
 	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
-	(w).Header().Set("Access-Control-Allow-Origin", "*")
-	(w).Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, OPTIONS, DELETE")
-	(w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 	err := json.NewEncoder(w).Encode(obj)
 	if err != nil {
@@ -375,6 +372,22 @@ func RunBigQuery(query string, location... string) error {
 	}
 
 	return nil
+}
+
+func SetCORS(w *http.ResponseWriter, r *http.Request, allowedOrigins ...map[string]string) {
+	if len(allowedOrigins) > 0 {
+		if _, ok := allowedOrigins[0][r.Header.Get("Origin")]; !ok {
+			if FinalErr(*w, fmt.Errorf("incoming call is not an allowed origin for this API: %v", r.Header.Get("Origin"))) != nil {
+				return
+			}
+		}
+	}
+
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, OPTIONS, DELETE")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	return
 }
 
 func setGCPKey(key string) (string, error) {
