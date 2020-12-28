@@ -14,7 +14,7 @@ type IRepo interface {
 }
 
 type BlueprintRepo struct {
-	Repo  IRepo
+	Repo IRepo
 }
 
 type Repo struct {}
