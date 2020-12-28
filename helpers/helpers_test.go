@@ -29,11 +29,11 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			name: fmt.Sprintf("%s: HappyDay2", GetTestName()),
-			data: "Status: In Progress | Assignee: steven@mozimbique.com",
-			regex: "Status: (.+).+\\| Assignee: (.*)",
+			data: "StatusCode: In Progress | Assignee: steven@mozimbique.com",
+			regex: "StatusCode: (.+).+\\| Assignee: (.*)",
 			expected: [][]string{
 				{
-					"Status: In Progress | Assignee: steven@mozimbique.com",
+					"StatusCode: In Progress | Assignee: steven@mozimbique.com",
 					"In Progress",
 					"steven@mozimbique.com",
 				},
