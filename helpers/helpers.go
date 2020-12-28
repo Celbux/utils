@@ -38,7 +38,6 @@ import (
  * Requirement: Call InitialiseClients(projectID) in main app start up
  */
 
-
 // CallEndpoint is used to call and Endpoint from code
 // It is used for testing purposes
 func CallEndpoint(f func(http.ResponseWriter, *http.Request), endpoint string, req interface{}) error {
@@ -46,7 +45,7 @@ func CallEndpoint(f func(http.ResponseWriter, *http.Request), endpoint string, r
 	if err != nil {
 	    return err
 	}
-	
+
 	f(w, request)
 	res := &Response{}
 	_ = json.NewDecoder(w.Body).Decode(&res)
@@ -91,31 +90,8 @@ func DownloadObject(bucket string, object string) ([]byte, error) {
 	return data, nil
 }
 
-func Encode(w http.ResponseWriter, obj interface{}) error {
-	// Writes the encoded marshalled json into the http writer mainly for the purpose of a response
-	(w).Header().Set("Content-Type", "application/json; charset=utf-8")
-	(w).Header().Set("Access-Control-Allow-Origin", "*")
-	(w).Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, OPTIONS, DELETE")
-	(w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-	err := json.NewEncoder(w).Encode(obj)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func Encrypt(data string) string {
 	return b64.URLEncoding.EncodeToString([]byte(data))
-}
-
-func FinalErr(w http.ResponseWriter, err error) error {
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ =  Encode(w, &Response{Error: LogError(err).Error()})
-		return err
-	}
-	return nil
 }
 
 func GetProjectID() (string, error) {

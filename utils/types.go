@@ -1,25 +1,25 @@
-package helpers
+package utils
 
 import "net/http"
 
-type IUtilsRepo interface {
-	FinalErr(w http.ResponseWriter, err error) error
-	encode(w http.ResponseWriter, obj interface{}) error
+type Server struct {
+	Service BlueprintRepo
 }
 
-type UtilsService struct {
-	Error 	HTTPError
+type IRepo interface {
+	NewErr(details string, status int) HTTPResponse
+	Err(w http.ResponseWriter, err HTTPResponse) bool
+
+	respond(w http.ResponseWriter, obj interface{}) error
 }
 
-type HTTPError struct {
-	Cause      error
-	Detail     string
+type BlueprintRepo struct {
+	Repo  IRepo
+}
+
+type Repo struct {}
+
+type HTTPResponse struct {
+	Details    string
 	StatusCode int
-}
-
-func (e HTTPError) Error() string {
-	if e.Cause == nil {
-		return e.Detail
-	}
-	return e.Detail + " : " + e.Cause.Error()
 }
